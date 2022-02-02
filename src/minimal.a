@@ -1,0 +1,6 @@
+	include	'Traps.a'
+	
+	main
+	_ExitToShell
+	
+	end
