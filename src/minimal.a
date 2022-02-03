@@ -1,3 +1,5 @@
+	; A program that starts and stops without crashing.
+	
 	include	'Traps.a'
 	
 	main

@@ -1,0 +1,28 @@
+	; A program that draws by writing directly to the screen buffer.
+	
+	; For fun ,we'll copy a piece of memory from elsewhere into 
+	; the screen buffer.
+	
+	
+	
+	include	'Traps.a'
+
+scrnbase equ $824			; pointer to bottom of screen buffer
+	
+	main
+	
+	;_debugger
+	move.l scrnbase, A0		; scrnbase is dereferenced here
+
+	move.l A7, A1			; start copying from the current stack pointer
+	move.w #20000, D1		; initialize loop variable
+	
+Draw
+	move.b (A1)+, (A0)+		; move bits to the screen
+	subq #1, D1				; decrement loop variable
+	bne Draw				; repeat until loop variable hits 0
+	
+	addq #4, SP 			; unwind the stack
+	_ExitToShell
+	
+	end
