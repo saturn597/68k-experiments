@@ -3,19 +3,23 @@
 	; For fun ,we'll copy a piece of memory from elsewhere into 
 	; the screen buffer.
 	
-	
-	
 	include	'Traps.a'
+	include 'ToolEqu.a'
 
 scrnbase equ $824			; pointer to bottom of screen buffer
 	
+theEvent ds.w 16			; put retrieved UI events here
+
 	main
 	
-	;_debugger
-	move.l scrnbase, A0		; scrnbase is dereferenced here
+Main
+	move.l #0, WindowList	; to use events but not windows per "Inside Macintosh", I-255
+	
+	move.l scrnbase, A0		; dereferences scrnbase
 
 	move.l A7, A1			; start copying from the current stack pointer
 	move.w #20000, D1		; initialize loop variable
+	
 	
 Draw
 	move.b (A1)+, (A0)+		; move bits to the screen
@@ -23,6 +27,22 @@ Draw
 	bne Draw				; repeat until loop variable hits 0
 	
 	addq #4, SP 			; unwind the stack
+
+	pea -1
+	pea 0
+	_FlushEvents
+
+Wait
+	;_debugger
+	sub.l #2, A7			; room for getNextEvent return value
+	move.w #-1, -(A7)		; first param for getNextEvent (-1 event mask)
+	pea theEvent			; next param - event record goes here
+	_getNextEvent
+	add.l #2, A7			; don't care about return value
+	move.w theEvent, D2		; first word of event record is event type
+	cmp.w #1, D2			; #1 is mouse down event
+	bne Wait				; loop until mouse down
+	
 	_ExitToShell
 	
 	end
