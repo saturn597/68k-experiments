@@ -29,21 +29,19 @@ Draw
 	pea 0
 	_FlushEvents			; flushEvents(-1, 0) to empty event queue
 
-	move.l A7, A6			; save stack pointer
-
-Wait
 	;_debugger
+	link A6, #-18			; room to hold boolean return val of getNextEvent and the event data
 	
-	sub.l #18, A7			; make room for getNextEvent return val + event info
+Wait
 	move.w #-1, -(A7)		; first param for getNextEvent (-1 event mask)
-	pea -16(A6)				; next param; event info goes here
+	pea -16(A6)				; next param; event info goes to this address
 	_getNextEvent
-	
-	move.l A6, A7			; restore stack
 	
 	sub.w #1, -16(A6)		; event type of 1 is mouse down
 	bne Wait				; loop until mouse down
 	
+	unlk A6					; restore stack
+
 	_ExitToShell
 	
 	end
