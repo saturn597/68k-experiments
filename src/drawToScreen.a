@@ -6,30 +6,35 @@
 	include	'Traps.a'
 	include 'ToolEqu.a'
 
-scrnbase equ $824			; pointer to bottom of screen buffer
+scrnbase equ $824			; pointer to bottom of screen buffer	
 	
 	main
 	
-Main
-	move.l #0, WindowList	; to use events but not windows per "Inside Macintosh", I-255
-	
-	move.l scrnbase, A0		; dereferences scrnbase
+	move.l #0, WindowList	; to use events without windows per Inside Macintosh, I-25
 
-	move.l A7, A1			; start copying from the current stack pointer
-	move.w #5000, D1		; initialize loop variable
+	jsr GetScreenMax		; puts lower right corner coords in D1
 	
+	; Find the number of long words the screen data occupies.
+	; First multiply the bottom bound by the right.
+	move.w D1, D2			; Moves low word in D1 to D2
+	swap D1					; Swap high and low words in D1
+	mulu.w D1, D2			; Multiply low word in both registers
+	
+	asr.l #5, D2			; Divide by 2^5 (32 bits in long word)
+	
+	; Set up loop.
+	sub.w #1, D2			; for our loop variable (which will go through 0)
+	move.l scrnbase, A0		; dereferences scrnbase
+	move.l A7, A1			; start copying from the current stack pointer	
 	
 Draw
-	move.l (A1)+, (A0)+		; move bits to the screen
-	dbra D1, Draw			; loop until D1 is -1
-
-	addq #4, SP 			; unwind the stack
+	move.l (A1)+, (A0)+		; move bits to the screen, one long word at time
+	dbra D2, Draw			; decrement and loop until D2 is -1
 
 	pea -1
 	pea 0
 	_FlushEvents			; flushEvents(-1, 0) to empty event queue
 
-	;_debugger
 	link A6, #-18			; room to hold boolean return val of getNextEvent and the event data
 	
 Wait
@@ -38,10 +43,44 @@ Wait
 	_getNextEvent
 	
 	sub.w #1, -16(A6)		; event type of 1 is mouse down
-	bne Wait				; loop until mouse down
+	bne.s Wait				; loop until mouse down
 	
 	unlk A6					; restore stack
 
 	_ExitToShell
 	
+	
+GetScreenMax
+	link A6, #-206  		; Size of QuickDraw global vars
+	pea -4(A6)				; _Initgraf param - address for thePort
+	_InitGraf
+	
+	; The QD globals placed under (A6) by _InitGraf are a complex 
+	; structure, but we only want the screen bounds here.
+	
+	; See Inside Macintosh, I-163
+	
+	; Here's data we're NOT interested in and its offset from a6:
+	
+	; thePort: -4
+	; white pattern: -12
+	; black pattern: -20
+	; gray pattern: -28
+	; ltgray pattern: -36
+	; dkgray pattern: -44
+	; arrow cursor: -112
+	
+	; Then we have the 8 byte bounds rectangle we DO want, at -120.
+	
+	; Within the bounds rect, the first 4 bytes are the top and left 
+	; of screen.
+	
+	; Then we have 4 bytes for the bottom and right, which is what we
+	; want. So the address we want is at a -116 offset from A6. Return
+	; it in D1.
+	
+	move.l -116(A6), D1
+	unlk A6
+	rts
+
 	end
