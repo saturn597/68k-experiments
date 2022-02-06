@@ -1,6 +1,6 @@
 	; A program that draws by writing directly to the screen buffer.
 	
-	; For fun ,we'll copy a piece of memory from elsewhere into 
+	; For fun, we'll copy a piece of memory from elsewhere into 
 	; the screen buffer.
 	
 	include	'Traps.a'
@@ -16,29 +16,31 @@ Main
 	move.l scrnbase, A0		; dereferences scrnbase
 
 	move.l A7, A1			; start copying from the current stack pointer
-	move.w #20000, D1		; initialize loop variable
+	move.w #5000, D1		; initialize loop variable
 	
 	
 Draw
-	move.b (A1)+, (A0)+		; move bits to the screen
-	subq #1, D1				; decrement loop variable
-	bne Draw				; repeat until loop variable hits 0
-	
+	move.l (A1)+, (A0)+		; move bits to the screen
+	dbra D1, Draw			; loop until D1 is -1
+
 	addq #4, SP 			; unwind the stack
 
 	pea -1
 	pea 0
 	_FlushEvents			; flushEvents(-1, 0) to empty event queue
 
+	move.l A7, A6			; save stack pointer
 
 Wait
 	;_debugger
-	move.l A7, A6			; save stack pointer
+	
 	sub.l #18, A7			; make room for getNextEvent return val + event info
 	move.w #-1, -(A7)		; first param for getNextEvent (-1 event mask)
 	pea -16(A6)				; next param; event info goes here
 	_getNextEvent
-	movea.l A6, A7			; restore stack
+	
+	move.l A6, A7			; restore stack
+	
 	sub.w #1, -16(A6)		; event type of 1 is mouse down
 	bne Wait				; loop until mouse down
 	
