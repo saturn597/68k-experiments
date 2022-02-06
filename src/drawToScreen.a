@@ -8,8 +8,6 @@
 
 scrnbase equ $824			; pointer to bottom of screen buffer
 	
-theEvent ds.w 16			; put retrieved UI events here
-
 	main
 	
 Main
@@ -30,17 +28,18 @@ Draw
 
 	pea -1
 	pea 0
-	_FlushEvents
+	_FlushEvents			; flushEvents(-1, 0) to empty event queue
+
 
 Wait
 	;_debugger
-	sub.l #2, A7			; room for getNextEvent return value
+	move.l A7, A6			; save stack pointer
+	sub.l #18, A7			; make room for getNextEvent return val + event info
 	move.w #-1, -(A7)		; first param for getNextEvent (-1 event mask)
-	pea theEvent			; next param - event record goes here
+	pea -16(A6)				; next param; event info goes here
 	_getNextEvent
-	add.l #2, A7			; don't care about return value
-	move.w theEvent, D2		; first word of event record is event type
-	cmp.w #1, D2			; #1 is mouse down event
+	movea.l A6, A7			; restore stack
+	sub.w #1, -16(A6)		; event type of 1 is mouse down
 	bne Wait				; loop until mouse down
 	
 	_ExitToShell
