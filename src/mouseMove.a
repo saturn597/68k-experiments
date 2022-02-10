@@ -1,0 +1,59 @@
+	; A program allowing the user to move a rectangle on screen with the
+	; mouse. 
+	
+	include 'Traps.a'		; Gets us A-traps
+	include 'SysEqu.a'  	; For ScrnBase
+
+qd ds.b 206					; allocate for QuickDraw globals
+
+getBitsInScreen proc
+	; Returns the number of bits in the screen.
+	
+	move.l D1, -(SP)		; Save register D1
+	
+	; qd-116 contains 2 bytes for the rightmost coordinate on screen, and
+	; 2 for the coordinate lowest on the screen. Multiply those together
+	; to get the total number of bits. 
+	move.l qd-116(A5), D1   ; Move lower right corner of screen to D1
+	move.w D1, D2			; Moves low word in D1 to D2
+	swap D1					; Swap high and low words in D1
+	mulu.w D1, D2			; Multiply low word in both registers
+	
+	move.l (SP)+, D1		; Restore D1
+	rts
+
+drawPattern proc
+	; Takes a word passed on the stack as a pattern. Copy that pattern
+	; directly to the screen buffer.
+	
+	move.l (SP)+, A0		; Save the return address
+	
+	move.w (SP)+, D0		; Put the pattern in D0
+	move.l ScrnBase, A1		; Base of screen in A1
+	
+	jsr getBitsInScreen		; Get the # of bits in the screen
+	asr.l #4, D2			; Divide that by 16, we'll move word at a time
+	sub.w #1, D2			; Our loop will go through 0
+	
+@1	move.w D0, (A1)+		; Move a word to the screen
+	dbra D2, @1				; Do that repeatedly until D2 is 0
+	
+	_debugger
+	
+	pea (A0)				; Restore the return address
+	rts
+	endp
+
+	
+start main
+	
+	pea qd+202(A5)			; _initGraf takes the grafPtr as a parameter
+	_initGraf				; Initialize QuickDraw globals
+		
+	move.w #$ffff, -(SP)	; Make the screen black
+	jsr drawPattern
+	
+	_ExitToShell
+	end
+	
+

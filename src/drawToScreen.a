@@ -7,7 +7,7 @@
 	include 'ToolEqu.a'
 
 scrnbase equ $824			; pointer to bottom of screen buffer	
-	
+
 	main
 	
 	move.l #0, WindowList	; to use events without windows per Inside Macintosh, I-25
