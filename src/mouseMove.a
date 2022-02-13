@@ -4,7 +4,140 @@
 	include 'Traps.a'		; Gets us A-traps
 	include 'SysEqu.a'  	; For ScrnBase
 
-qd ds.b 206					; allocate for QuickDraw globals
+
+qdglobals	record 0, decrement
+thePort ds.l 1
+white ds.l 2
+black ds.l 2
+gray ds.l 2
+ltGray ds.l 2
+dkGray ds.l 2
+arrow ds.l 17
+rectRight ds.w 1
+rectBottom ds.w 1
+rectLeft ds.w 1
+rectTop ds.w 1
+rowBytes ds.w 1
+baseAddr ds.l 1
+randSeed ds.l 1
+	org -206
+	endr
+
+qd ds.b qdglobals					; allocate for QuickDraw globals
+
+
+drawLine2 proc
+	; Draw horizontal line at y-coord D2. Go from x=D0 to x=D1, max
+	; of 32 pixels.
+	
+	movem.l A0/D0-D7, -(SP)
+	
+	move.l scrnBase, A0
+	; A0 contains the screen base
+	
+	move.l #-1, D7
+	not.l D7
+	; D7 will contain the long word of individual pixels we draw
+
+	clr.l D6
+	move.w D2, D6
+	; D6 will contain our y-coord
+
+	swap D1
+	clr.w D1
+	swap D1
+	sub.w D0, D1
+	; D1 contains the number of bits we draw
+	
+	move.l D1, D2
+	divu.w #32, D2
+	cmp.w #0, D2
+	bne.s @1
+	; Draw 32 bits if line > 32 bits long
+	; D2 contains result of division of number of pixels by 32
+
+	not.l D7
+	clr.w D2
+	swap D2  			; Make D2 just the remainder
+	move.l #32, D3
+	sub.l D2, D3
+	asl.l D3, D7
+	not.l D7
+	; D7 contains bits to draw assuming we start on a byte boundary
+	
+@1
+	clr.l D3
+	move.w D0, D3
+	divu.w #8, D3
+	swap D3
+	move.w D3, D4
+	clr.w D3
+	swap D3
+	; So we're D3 bytes from the left-hand side, plus remainder of D4 bits
+
+	move.w qd.rowBytes, D5
+	mulu.w D6, D5
+	add.l D3, D5
+	; draw at offset D5 bytes from base
+
+	not.l D7
+	lsr.l D4, D7
+	not.l D7
+	; D7 now contains the long word we write to screen
+	
+	move.l D7, (A0, D5)			; Draw the line
+	
+	movem.l (SP)+, A0/D0-D7
+	rts
+	endp
+	
+	
+drawLine3 proc
+
+@1
+	_debugger
+	jsr drawLine2
+	add.w #32, D0
+	cmp.w D0, D1
+	bmi.s @2
+	bra @1
+
+@2
+	rts
+	endp
+	
+drawRect proc
+
+	; Draw a white rectangle at coordinates given in D0, length and
+	; width given in D1.
+	
+	movem.l D0-D3, -(SP)
+	
+	move.l D1, D2
+	
+	move.w D0, D1
+	swap D0
+	
+	move.w D2, D3
+	swap D2
+
+	move.w qd.rowBytes, D7
+
+@1	move.w D0, D4
+	asr #3, D4
+	move.w D1, D5
+	
+	mulu.w D7, D5
+	add.w D4, D5			; D5 gives us starting byte for writing
+	
+	move.l scrnBase, A0
+	; move.w #256, D5
+	clr.l (A0, D5)	
+	
+	movem.l (SP)+, D0-D3
+	
+	rts
+	endp
 
 getBitsInScreen proc
 	; Returns the number of bits in the screen.
@@ -14,7 +147,7 @@ getBitsInScreen proc
 	; qd-116 contains 2 bytes for the rightmost coordinate on screen, and
 	; 2 for the coordinate lowest on the screen. Multiply those together
 	; to get the total number of bits. 
-	move.l qd-116(A5), D1   ; Move lower right corner of screen to D1
+	move.l qd.rectRight, D1 ; Move lower right corner of screen to D1
 	move.w D1, D2			; Moves low word in D1 to D2
 	swap D1					; Swap high and low words in D1
 	mulu.w D1, D2			; Multiply low word in both registers
@@ -37,9 +170,7 @@ drawPattern proc
 	
 @1	move.w D0, (A1)+		; Move a word to the screen
 	dbra D2, @1				; Do that repeatedly until D2 is 0
-	
-	_debugger
-	
+		
 	pea (A0)				; Restore the return address
 	rts
 	endp
@@ -47,11 +178,49 @@ drawPattern proc
 	
 start main
 	
-	pea qd+202(A5)			; _initGraf takes the grafPtr as a parameter
+	pea qd.thePort			; _initGraf takes the grafPtr as a parameter
 	_initGraf				; Initialize QuickDraw globals
 		
 	move.w #$ffff, -(SP)	; Make the screen black
 	jsr drawPattern
+	
+	;;; calling drawRect
+	move.w #480, D0
+	swap D0
+	move.w #150, D0
+	
+	move.w #50, D1
+	swap d1
+	move.w #55, D1
+	;jsr drawRect
+	
+	;;; calling drawLine
+	move.w #100, D0
+	move.w #132, D1
+	move.w #8, D2
+	jsr drawLine2
+	;;; calling drawLine
+	move.w #132, D0
+	move.w #164, D1
+	move.w #16, D2
+	jsr drawLine2
+	;;; calling drawLine
+	move.w #164, D0
+	move.w #196, D1
+	move.w #24, D2
+	jsr drawLine2
+	;;; calling drawLine
+	move.w #196, D0
+	move.w #228, D1
+	move.w #32, D2
+	jsr drawLine2
+	
+	move.w #100, D0
+	move.w #240, D1
+	move.w #40, D2
+	jsr drawLine3
+		
+	_debugger
 	
 	_ExitToShell
 	end
