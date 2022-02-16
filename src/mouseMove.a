@@ -26,9 +26,76 @@ randSeed ds.l 1
 qd ds.b qdglobals					; allocate for QuickDraw globals
 
 
+drawLine4 proc
+	; Take x-coords D0 and D1 and y-coord D2. Draw a horizontal line at D2,
+	; from D0 to D1. (D0 < D1). But don't cross over x-coordinates that
+	; are divisible by 32. (So if going from 29 to 50, the line will only
+	; be 3 pixels long).
+	movem.l A0/D0-D7, -(SP)
+	
+	move.l scrnBase, A0
+	; A0 contains the screen base
+	
+	move.l #-1, D7
+	; D7 will contain the long word of individual pixels we draw
+
+	clr.l D3
+	move.w D0, D3
+	divu.w #32, D3
+	swap D3
+	move.w D3, D4
+	clr.w D3
+	swap D3
+	; D3 identifies the 32-bit horizontal segment we're drawing within. D4
+	; is the number of pixels to the right of that segment's start that our
+	; line will start.
+
+	lsr.l D4, D7
+	not.l D7
+	; D7 is now the bits we need to write to the screen. 
+	; (Assuming we go all the way to the end of our 32-bit segment)
+
+	clr.l D5
+	move.w D1, D5
+	divu #32, D5
+	cmp.w D3, D5
+	bne.s @1
+	; if the right-hand coordinate we were given is in a different 32
+	; bit segment, skip the next part, we'll just draw to the edge of the
+	; segment.
+	
+	clr.w D5
+	swap D5
+	sub.w #32, D5
+	; D5 contains the number of pixels in our line minus 32.
+	
+	neg.w D5
+	moveq.l #0, D6
+	moveq.l #1, D4
+	lsl.l D5, D4
+	subq.l #1, D4
+	or.l D4, D7
+	; Chop off the bits on the right of D7 if we're not drawing the whole
+	; 32 bit segment.
+
+	
+@1
+	mulu #4, D3					; Account for left x-coord
+	mulu qd.rowBytes, D2		; Account for y-coord
+	add.l D2, D3				
+	; now D3 is the number of bytes we need to go to get from the upper
+	; left of the screen to the start of the 32 pixel segment where we
+	; start drawing
+	
+	move.l D7, (A0, D3)			; Draw the line by writing to screen buff
+
+	movem.l (SP)+, A0/D0-D7
+	rts
+	endp
+
 drawLine2 proc
-	; Draw horizontal line at y-coord D2. Go from x=D0 to x=D1, max
-	; of 32 pixels.
+	; Draw horizontal line at y-coord D2. Go from x=D0 to x=D1, only
+	; drawing up to 32 bit boundary.
 	
 	movem.l A0/D0-D7, -(SP)
 	
@@ -61,7 +128,7 @@ drawLine2 proc
 	swap D2  			; Make D2 just the remainder
 	move.l #32, D3
 	sub.l D2, D3
-	asl.l D3, D7
+	lsl.l D3, D7
 	not.l D7
 	; D7 contains bits to draw assuming we start on a byte boundary
 	
@@ -84,7 +151,7 @@ drawLine2 proc
 	lsr.l D4, D7
 	not.l D7
 	; D7 now contains the long word we write to screen
-	
+
 	move.l D7, (A0, D5)			; Draw the line
 	
 	movem.l (SP)+, A0/D0-D7
@@ -93,15 +160,14 @@ drawLine2 proc
 	
 	
 drawLine3 proc
-
 @1
-	_debugger
-	jsr drawLine2
-	add.w #32, D0
+	jsr drawLine4
+	lsr.l #5, D0
+	addq.l #1, D0
+	lsl.l #5, D0
 	cmp.w D0, D1
 	bmi.s @2
-	bra @1
-
+	bra.s @1
 @2
 	rts
 	endp
@@ -193,33 +259,14 @@ start main
 	swap d1
 	move.w #55, D1
 	;jsr drawRect
-	
-	;;; calling drawLine
-	move.w #100, D0
-	move.w #132, D1
-	move.w #8, D2
-	jsr drawLine2
-	;;; calling drawLine
-	move.w #132, D0
-	move.w #164, D1
-	move.w #16, D2
-	jsr drawLine2
-	;;; calling drawLine
-	move.w #164, D0
-	move.w #196, D1
-	move.w #24, D2
-	jsr drawLine2
-	;;; calling drawLine
-	move.w #196, D0
-	move.w #228, D1
-	move.w #32, D2
-	jsr drawLine2
-	
-	move.w #100, D0
-	move.w #240, D1
-	move.w #40, D2
+
+	;; Call drawLine3
+	move.w #0, D0
+	move.w #512, D1
+	move.w #30, D2
 	jsr drawLine3
-		
+
+
 	_debugger
 	
 	_ExitToShell
