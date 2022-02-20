@@ -22,15 +22,16 @@ baseAddr ds.l 1
 randSeed ds.l 1
 	org -206
 	endr
+	
+qd ds.b qdglobals			; allocate for QuickDraw globals
 
-qd ds.b qdglobals					; allocate for QuickDraw globals
 
-
-drawLine4 proc
+drawLineHelper proc
 	; Take x-coords D0 and D1 and y-coord D2. Draw a horizontal line at D2,
-	; from D0 to D1. (D0 < D1). But don't cross over x-coordinates that
-	; are divisible by 32. (So if going from 29 to 50, the line will only
-	; be 3 pixels long).
+	; from D0 to D1. (D0 < D1). This procedure won't cross over 
+	; x-coordinates that are divisible by 32. (So if going from x=29 to 50, 
+	; the line will only be 3 pixels long because it'll stop before x=32).
+	
 	movem.l A0/D0-D7, -(SP)
 	
 	move.l scrnBase, A0
@@ -47,7 +48,7 @@ drawLine4 proc
 	clr.w D3
 	swap D3
 	; D3 identifies the 32-bit horizontal segment we're drawing within. D4
-	; is the number of pixels to the right of that segment's start that our
+	; is the number of pixels to the right of that segment's edge that our
 	; line will start.
 
 	lsr.l D4, D7
@@ -80,88 +81,25 @@ drawLine4 proc
 
 	
 @1
-	mulu #4, D3					; Account for left x-coord
-	mulu qd.rowBytes, D2		; Account for y-coord
+	mulu #4, D3				; Account for left x-coord
+	mulu qd.rowBytes, D2	; Account for y-coord
 	add.l D2, D3				
 	; now D3 is the number of bytes we need to go to get from the upper
 	; left of the screen to the start of the 32 pixel segment where we
 	; start drawing
 	
-	move.l D7, (A0, D3)			; Draw the line by writing to screen buff
+	move.l D7, (A0, D3)		; Draw the line by writing to screen buff
 
 	movem.l (SP)+, A0/D0-D7
 	rts
 	endp
 
-drawLine2 proc
-	; Draw horizontal line at y-coord D2. Go from x=D0 to x=D1, only
-	; drawing up to 32 bit boundary.
 	
-	movem.l A0/D0-D7, -(SP)
-	
-	move.l scrnBase, A0
-	; A0 contains the screen base
-	
-	move.l #-1, D7
-	not.l D7
-	; D7 will contain the long word of individual pixels we draw
+drawLine proc
 
-	clr.l D6
-	move.w D2, D6
-	; D6 will contain our y-coord
-
-	swap D1
-	clr.w D1
-	swap D1
-	sub.w D0, D1
-	; D1 contains the number of bits we draw
-	
-	move.l D1, D2
-	divu.w #32, D2
-	cmp.w #0, D2
-	bne.s @1
-	; Draw 32 bits if line > 32 bits long
-	; D2 contains result of division of number of pixels by 32
-
-	not.l D7
-	clr.w D2
-	swap D2  			; Make D2 just the remainder
-	move.l #32, D3
-	sub.l D2, D3
-	lsl.l D3, D7
-	not.l D7
-	; D7 contains bits to draw assuming we start on a byte boundary
-	
+	movem.l D0-D1, -(SP)
 @1
-	clr.l D3
-	move.w D0, D3
-	divu.w #8, D3
-	swap D3
-	move.w D3, D4
-	clr.w D3
-	swap D3
-	; So we're D3 bytes from the left-hand side, plus remainder of D4 bits
-
-	move.w qd.rowBytes, D5
-	mulu.w D6, D5
-	add.l D3, D5
-	; draw at offset D5 bytes from base
-
-	not.l D7
-	lsr.l D4, D7
-	not.l D7
-	; D7 now contains the long word we write to screen
-
-	move.l D7, (A0, D5)			; Draw the line
-	
-	movem.l (SP)+, A0/D0-D7
-	rts
-	endp
-	
-	
-drawLine3 proc
-@1
-	jsr drawLine4
+	jsr drawLineHelper
 	lsr.l #5, D0
 	addq.l #1, D0
 	lsl.l #5, D0
@@ -169,39 +107,36 @@ drawLine3 proc
 	bmi.s @2
 	bra.s @1
 @2
+	movem.l (SP)+, D0-D1
+	
 	rts
 	endp
 	
 drawRect proc
 
-	; Draw a white rectangle at coordinates given in D0, length and
-	; width given in D1.
+	; Draw a white rectangle at coordinates given in D0-D1, width and
+	; height in D2-D3.
+	
+	cmpi #0, D3				; Don't do anything if height <= 0
+	ble.s @2
 	
 	movem.l D0-D3, -(SP)
-	
-	move.l D1, D2
-	
-	move.w D0, D1
-	swap D0
-	
-	move.w D2, D3
-	swap D2
-
-	move.w qd.rowBytes, D7
-
-@1	move.w D0, D4
-	asr #3, D4
-	move.w D1, D5
-	
-	mulu.w D7, D5
-	add.w D4, D5			; D5 gives us starting byte for writing
-	
-	move.l scrnBase, A0
-	; move.w #256, D5
-	clr.l (A0, D5)	
+		
+	exg D1, D2
+	add.w D0, D1
+	subq.w #1, D3
+	; We want D0 to be the left x-coord, D1 to be the right x-coord, D2
+	; to be the y-coord. D3 will be our current y-coord as we loop.
+		
+@1
+	; Draw the rectangle as a series of horizontal lines
+	jsr drawLine
+	addq.w #1, D2			; Increment the y-coord by 1
+	dbra D3, @1				; Loop until we've drawn the whole height
 	
 	movem.l (SP)+, D0-D3
-	
+
+@2
 	rts
 	endp
 
@@ -243,28 +178,19 @@ drawPattern proc
 
 	
 start main
-	
+	_debugger
+
 	pea qd.thePort			; _initGraf takes the grafPtr as a parameter
 	_initGraf				; Initialize QuickDraw globals
 		
 	move.w #$ffff, -(SP)	; Make the screen black
 	jsr drawPattern
-	
-	;;; calling drawRect
-	move.w #480, D0
-	swap D0
-	move.w #150, D0
-	
-	move.w #50, D1
-	swap d1
-	move.w #55, D1
-	;jsr drawRect
 
-	;; Call drawLine3
-	move.w #0, D0
-	move.w #512, D1
-	move.w #30, D2
-	jsr drawLine3
+	move.l #156, D0 		; Rect x-coord
+	move.l #121, D1			; Rect y-coord
+	move.l #200, D2			; Rect width
+	move.l #100, D3			; Rect height
+	jsr drawRect
 
 
 	_debugger
