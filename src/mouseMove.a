@@ -27,10 +27,11 @@ qd ds.b qdglobals			; allocate for QuickDraw globals
 
 
 drawLineHelper proc
-	; Take x-coords D0 and D1 and y-coord D2. Draw a horizontal line at D2,
+	; Take x-coords D0.w and D1.w and y-coord D2.w. Draw a horizontal line at D2,
 	; from D0 to D1. (D0 < D1). This procedure won't cross over 
 	; x-coordinates that are divisible by 32. (So if going from x=29 to 50, 
 	; the line will only be 3 pixels long because it'll stop before x=32).
+	; If upper word of D0 is negative, draw in black.
 	
 	movem.l A0/D0-D7, -(SP)
 	
@@ -88,6 +89,25 @@ drawLineHelper proc
 	; left of the screen to the start of the 32 pixel segment where we
 	; start drawing
 	
+	move.l (A0, D3), D1		; D1 contains pixels where we're drawing
+
+	swap D0
+	tst.w D0
+	bmi.s @2
+	; Branch if we're drawing black
+
+	not.l D1
+	not.l D7
+	or.l D1, D7
+	not.l D7
+	; leaving the area around the line unchanged
+
+	bra.s @3
+	
+@2
+	not.l D7
+	or.l D1, D7
+@3
 	move.l D7, (A0, D3)		; Draw the line by writing to screen buff
 
 	movem.l (SP)+, A0/D0-D7
@@ -96,8 +116,15 @@ drawLineHelper proc
 
 	
 drawLine proc
-
+	; Draw a horizontal line from x=D0.w to x=D1.w, at y=D2.w. If upper
+	; word of D0 is negative, draw in black.
+	
 	movem.l D0-D1, -(SP)
+	
+	cmp.w qd.rectRight, D1
+	bmi.s @1
+	move.w qd.rectRight, D1
+	; Clip at right edge of screen
 @1
 	jsr drawLineHelper
 	lsr.l #5, D0
@@ -113,9 +140,8 @@ drawLine proc
 	endp
 	
 drawRect proc
-
-	; Draw a white rectangle at coordinates given in D0-D1, width and
-	; height in D2-D3.
+	; Draw a  rectangle at coordinates given in D0-D1, width and height in
+	; D2-D3.If upper word of D0 is negative, draw in black.
 	
 	cmpi #0, D3				; Don't do anything if height <= 0
 	ble.s @2
@@ -176,24 +202,50 @@ drawPattern proc
 	rts
 	endp
 
-	
+
+black equ -1
+white equ 0
+
+fg equ white
+bg equ black
+
 start main
-	_debugger
 
 	pea qd.thePort			; _initGraf takes the grafPtr as a parameter
 	_initGraf				; Initialize QuickDraw globals
-		
-	move.w #$ffff, -(SP)	; Make the screen black
+
+	move.w #bg, -(SP)		; draw background
 	jsr drawPattern
+	
+	move.w #0, D0			; initialize our coordinates
 
-	move.l #156, D0 		; Rect x-coord
-	move.l #121, D1			; Rect y-coord
-	move.l #200, D2			; Rect width
-	move.l #100, D3			; Rect height
+	move.w #300, D1			; y-coord of rectangle
+	move.w #10, D3			; height of rectangle
+
+@1
+	move.l RawMouse, D4		; get mouse coordinates
+
+	cmp.w D0, D4
+	beq.s @2				; Only clear paddle if mouse has moved
+	swap D0
+	move.w #bg, D0			; Set background color
+	swap D0
 	jsr drawRect
+	; If the paddle has moved, draw over its previous location with
+	; background color
 
-
-	_debugger
+@2
+	move.w #fg, D0		
+	swap D0
+	move.w D4, D0
+	move.w #100, D2
+	jsr drawRect	
+	; now draw the paddle in foreground color
+	
+	move.b MBState, D4 
+	sub.w #1, D4
+	bpl.s @1
+	; Continue looping until mouse button clicked
 	
 	_ExitToShell
 	end
