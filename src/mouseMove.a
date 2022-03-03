@@ -211,42 +211,125 @@ bg equ black
 
 start main
 
+frame 		record {a6Link},decr
+a6Link		ds.l	1
+paddleX		ds.w	1
+ballX		ds.w	1
+ballY		ds.w	1
+ballDx		ds.w	1
+ballDy		ds.w	1
+ballCounter	ds.l	1
+padCounter	ds.l	1
+localSize 	equ		*
+	endr
+	
+	with frame
+
+	link A6, #localSize
+	
 	pea qd.thePort			; _initGraf takes the grafPtr as a parameter
 	_initGraf				; Initialize QuickDraw globals
 
+	_hideCursor
+	
+	move.w #0, D0			; initialize coordinates
+
+initializeGame
 	move.w #bg, -(SP)		; draw background
 	jsr drawPattern
+
+	move.w #256, ballX(A6)
+	move.w #100, ballY(A6)
+	move.w #1, ballCounter(A6)
+	move.w #1, padCounter(A6)
+	clr.w ballDx(A6)
+	move.w #2, ballDy(A6)
+
+gameLoop
+	move.w #300, D1			; y-coord of paddle
+	move.w #100, D2			; width of paddle
+	move.w #7, D3			; height of paddle
 	
-	move.w #0, D0			; initialize our coordinates
+	;subq.w #1, padCounter(A6)
+	;bne.s updateBall
 
-	move.w #300, D1			; y-coord of rectangle
-	move.w #10, D3			; height of rectangle
-
-@1
+	;move.w #10, padCounter(A6)
+	
 	move.l RawMouse, D4		; get mouse coordinates
+	
+	swap D0
+	move.w #fg, D0
+	swap D0
+	cmp.w paddleX(A6), D4
+	beq.s drawIt
+	swap D0
+	move.w #bg, D0
+	swap D0
+	; if the mouse has moved, draw in background color next so we 
+	; erase the old paddle. Otherwise, keep the foreground color.
 
-	cmp.w D0, D4
-	beq.s @2				; Only clear paddle if mouse has moved
-	swap D0
-	move.w #bg, D0			; Set background color
-	swap D0
+drawIt
+	move.w paddleX(A6), D0	; draw paddle at old position
 	jsr drawRect
-	; If the paddle has moved, draw over its previous location with
-	; background color
+	; Draw over paddle's previous location with background color
 
-@2
+	move.w D4, paddleX(A6)	; mouse position is new paddle X
+	
 	move.w #fg, D0		
 	swap D0
-	move.w D4, D0
-	move.w #100, D2
+	move.w paddleX(A6), D0
 	jsr drawRect	
 	; now draw the paddle in foreground color
+
+updateBall
+	subq.w #1, ballCounter(A6)
+	bne.s checkMouse
+	; only redraw ball when counter hits zero
 	
+	move.w #1, ballCounter(A6)
+	; restart counter
+	
+	move.w ballX(A6), D4
+	move.w ballY(A6), D5
+	; Save old coords in D4, D5
+	
+	move.w D4, D6
+	move.w D5, D7
+	add.w ballDx(A6), D6
+	add.w ballDy(A6), D7
+	addq.w #7, D7				; D6 is bottom coord of ball
+	cmp.w qd.rectBottom, D7
+	bpl.w initializeGame
+	subq.w #7, D7
+	;recalc ball's position	
+
+	move.w D6, ballX(A6)
+	move.w D7, ballY(A6)
+	;save ball's new position
+
+	move.w #bg, D0
+	swap D0
+	move.w D4, D0
+	move.w D5, D1
+	move.w #7, D2
+	move.w #7, D3
+	jsr drawRect
+	;clear previous ball
+	
+	move.w #fg, D0
+	swap D0
+	move.w D6, D0
+	move.w D7, D1
+	jsr drawRect
+	; draw new ball
+	
+checkMouse
 	move.b MBState, D4 
-	sub.w #1, D4
-	bpl.s @1
+	sub.b #1, D4
+	bpl.w gameLoop
 	; Continue looping until mouse button clicked
-	
+
+end
 	_ExitToShell
 	end
 	
