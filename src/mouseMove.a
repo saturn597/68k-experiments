@@ -220,6 +220,7 @@ ballDx		ds.w	1
 ballDy		ds.w	1
 ballCounter	ds.l	1
 padCounter	ds.l	1
+prevTicks	ds.l	1
 localSize 	equ		*
 	endr
 	
@@ -235,6 +236,7 @@ localSize 	equ		*
 	move.w #0, D0			; initialize coordinates
 
 initializeGame
+	move.l ticks, prevTicks(A6)
 	move.w #bg, -(SP)		; draw background
 	jsr drawPattern
 
@@ -243,7 +245,7 @@ initializeGame
 	move.w #1, ballCounter(A6)
 	move.w #1, padCounter(A6)
 	clr.w ballDx(A6)
-	move.w #2, ballDy(A6)
+	move.w #4, ballDy(A6)
 
 gameLoop
 	move.w #300, D1			; y-coord of paddle
@@ -289,15 +291,26 @@ updateBall
 	move.w #1, ballCounter(A6)
 	; restart counter
 	
+	move.l prevTicks(A6), D0
+	sub.l ticks, D0
+	neg.l D0
+	move.w ballDx(A6), D1
+	move.w ballDy(A6), D2
+	mulu.w D0, D1
+	mulu.w D0, D2
+	move.l ticks, prevTicks(A6)
+	; Calculate amount to change X and Y based on how many ticks since 
+	; last update (1 tick = 1/60 sec)
+	
 	move.w ballX(A6), D4
 	move.w ballY(A6), D5
 	; Save old coords in D4, D5
 	
 	move.w D4, D6
 	move.w D5, D7
-	add.w ballDx(A6), D6
-	add.w ballDy(A6), D7
-	addq.w #7, D7				; D6 is bottom coord of ball
+	add.w D1, D6
+	add.w D2, D7
+	addq.w #7, D7				; D7 is bottom coord of ball
 	cmp.w qd.rectBottom, D7
 	bpl.w initializeGame
 	subq.w #7, D7
