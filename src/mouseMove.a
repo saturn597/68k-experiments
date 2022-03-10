@@ -181,6 +181,7 @@ getBitsInScreen proc
 	
 	move.l (SP)+, D1		; Restore D1
 	rts
+endp
 
 drawPattern proc
 	; Takes a word passed on the stack as a pattern. Copy that pattern
@@ -200,6 +201,74 @@ drawPattern proc
 		
 	pea (A0)				; Restore the return address
 	rts
+	endp
+
+contains proc
+
+frame 		record {a6Link}, decr
+isContained	ds.w	1
+params		equ		*
+x1			ds.w	1
+y1			ds.w	1
+x2			ds.w	1
+y2			ds.w	1
+w			ds.w	1
+h			ds.w	1
+paramSize	equ		params-*
+retAddr		ds.l	1
+a6Link		ds.l	1
+localSize	equ		*
+	endr
+	
+	with frame
+	;_debugger ; -18
+	link A6, #localSize
+	;_debugger ; -22
+
+	move.l D0, -(SP)			; Save D0
+	;_debugger ; -26
+
+	move.w #-1, isContained(A6)
+
+	move.w x2(A6), D0
+	cmp.w x1(A6), D0
+	bpl.s end					; point is to left of rect
+	
+	move.w y2(A6), D0
+	cmp.w y1(A6), D0
+	bpl.s end					; point is above rect
+	
+	move.w x2(A6), D0			; D0 is right edge of rect
+	add.w w(A6), D0
+	cmp.w x1(A6), D0
+	bmi.s end					; point is to right of right edge of rect
+	
+	move.w y2(A6), D0
+	add.w h(A6), D0				; D0 is bottom edge of rect
+	cmp.w y1(A6), D0
+	bmi.s end					; point is below rect
+
+	clr.w isContained(A6)		; isContained is true if we get here
+end
+	;_debugger ; -26
+	move.l (SP)+, D0			; Restore D0
+	;_debugger ; -22
+	unlk A6
+	;_debugger ; -18
+	movea.l (SP)+, A0
+	;_debugger ; -14
+	adda.l #paramSize, SP
+	;_debugger ; -2
+	jmp (A0)
+	endp
+
+collision proc
+frame 	record {a6Link}, decr
+x		ds.w	1
+y		ds.w	1
+a6Link	ds.l	1
+	endr
+	
 	endp
 
 
@@ -245,7 +314,7 @@ localSize 	equ		*
 	_hideCursor
 	
 	move.w #0, D0			; initialize coordinates
-	
+		
 	move.w qd.rectRight, maxX(A6)
 	sub.w #ballW, maxX(A6)
 	move.w qd.rectLeft, minX(A6)
@@ -299,12 +368,6 @@ drawIt
 	; now draw the paddle in foreground color
 
 updateBall
-	subq.w #1, ballCounter(A6)
-	bne.w checkMouse
-	; only redraw ball when counter hits zero
-	
-	move.w #1, ballCounter(A6)
-	; restart counter
 	
 	move.l prevTicks(A6), D0
 	sub.l ticks, D0
@@ -325,28 +388,43 @@ updateBall
 	move.w D5, D7
 	add.w D1, D6
 	add.w D2, D7
-	;recalc ball's position	
+	;recalc ball's position
 
-screenBottom	
+
+screenBottom
 	cmp.w maxY(A6), D7
 	bmi.s screenTop
 	neg.w ballDy(A6)
-	bra.s gameLoop
+	bra.s checkMouse
 screenTop
 	cmp.w minY(A6), D7
 	bpl.s screenLeft
 	neg.w ballDy(A6)
-	bra.w gameLoop
+	bra.s checkMouse
 screenLeft
 	cmp.w minX(A6), D6
 	bpl.s screenRight
 	neg.w ballDx(A6)
-	bra.w gameLoop
+	bra.s checkMouse
 screenRight
 	cmp.w maxX(A6), D6
-	bmi.s endCollisions
+	bmi.s paddle
 	neg.w ballDx(A6)
-	bra.w gameLoop
+	bra.s checkMouse
+paddle
+	subq.l #2, SP
+	move.w D6, -(SP)
+	move.w D7, -(SP)
+	add.w #ballH, (SP)
+	move.w paddleX(A6), -(SP)
+	move.w #paddleY, -(SP)
+	move.w #paddleW, -(SP)
+	move.w #paddleH, -(SP)
+	jsr contains
+	tst.w (SP)+
+	bmi.s endCollisions
+	neg.w ballDy(A6)
+	bra.s checkMouse
 endCollisions
 	; Check collisions
 
