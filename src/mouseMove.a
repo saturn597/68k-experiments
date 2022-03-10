@@ -25,6 +25,11 @@ randSeed ds.l 1
 	
 qd ds.b qdglobals			; allocate for QuickDraw globals
 
+black equ -1
+white equ 0
+
+fg equ white
+bg equ black
 
 drawLineHelper proc
 	; Take x-coords D0.w and D1.w and y-coord D2.w. Draw a horizontal line at D2,
@@ -221,12 +226,9 @@ localSize	equ		*
 	endr
 	
 	with frame
-	;_debugger ; -18
 	link A6, #localSize
-	;_debugger ; -22
 
 	move.l D0, -(SP)			; Save D0
-	;_debugger ; -26
 
 	move.w #-1, isContained(A6)
 
@@ -250,16 +252,43 @@ localSize	equ		*
 
 	clr.w isContained(A6)		; isContained is true if we get here
 end
-	;_debugger ; -26
 	move.l (SP)+, D0			; Restore D0
-	;_debugger ; -22
 	unlk A6
-	;_debugger ; -18
 	movea.l (SP)+, A0
-	;_debugger ; -14
 	adda.l #paramSize, SP
-	;_debugger ; -2
 	jmp (A0)
+	endp
+	
+drawBricks proc
+brickW equ 64
+brickH equ 7
+brickXSpace equ 20
+brickYSpace equ 40
+brickMaxY equ 200
+
+	movem.l D0-D3, -(SP)
+	move.w #fg, D0
+	swap D0
+	move.w #brickXSpace, D0
+	move.w #brickYSpace, D1
+	move.w #brickW, D2
+	move.w #brickH, D3
+	
+drawRow
+	jsr drawRect
+	add.w #brickXSpace, D0
+	add.w #brickW, D0
+	cmp.w qd.rectRight, D0
+	bmi.s drawRow
+
+	move.w #brickXSpace, D0
+	add.w #brickYSpace, D1
+	add.w #brickH, D1
+	cmp.w #brickMaxY, D1
+	bmi.s drawRow
+end
+	movem.l (SP)+, D0-D3
+	rts
 	endp
 
 collision proc
@@ -270,13 +299,6 @@ a6Link	ds.l	1
 	endr
 	
 	endp
-
-
-black equ -1
-white equ 0
-
-fg equ white
-bg equ black
 
 ballW equ 7						; ball width
 ballH equ 7						; ball height
@@ -328,6 +350,8 @@ initializeGame
 	move.l ticks, prevTicks(A6)
 	move.w #bg, -(SP)		; draw background
 	jsr drawPattern
+	
+	jsr drawBricks
 
 	move.w #256, ballX(A6)
 	move.w #100, ballY(A6)
@@ -368,7 +392,6 @@ drawIt
 	; now draw the paddle in foreground color
 
 updateBall
-	
 	move.l prevTicks(A6), D0
 	sub.l ticks, D0
 	neg.l D0
@@ -415,7 +438,7 @@ paddle
 	subq.l #2, SP
 	move.w D6, -(SP)
 	move.w D7, -(SP)
-	add.w #ballH, (SP)
+	add.w #ballH, (SP)				; Looking at bottom left corner of ball
 	move.w paddleX(A6), -(SP)
 	move.w #paddleY, -(SP)
 	move.w #paddleW, -(SP)
