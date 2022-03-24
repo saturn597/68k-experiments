@@ -302,6 +302,9 @@ loop
 setBricks proc
 	movem.l D0-D4/A0, -(SP)
 	
+	lea.l brickStatus, A0
+	move.l #$00ffffff, (A0)
+	
 	move.w #brickXSpace, D0
 	move.w #brickYSpace, D1
 	move.w #brickW, D2
@@ -487,7 +490,7 @@ screenBottom
 	cmp.w maxY(A6), D7
 	bmi.s screenTop
 	neg.w ballDy(A6)
-	bra.w checkMouse
+	bra.w end
 screenTop
 	cmp.w minY(A6), D7
 	bpl.s screenLeft
@@ -516,26 +519,70 @@ paddle
 	tst.w (SP)+
 	bmi.s brickCol
 	neg.w ballDy(A6)
-	bra.s checkMouse
-brickCol		
+	bra.w checkMouse
+brickCol	
 	move.w #numBricks-1, D0
 	lea.l bricks, A1
+	
+	lea.l brickStatus, A2
 brickColLoop
 
+	move.l brickStatus, D1
+	move.l #1, D2
+	asl.l D0, D2
+	move.l D2, D3				; Save D2 for later
+	and.l D1, D2
+	beq.s endCheck
+	
 	subq.l #2, SP
-
 	move.w D6, -(SP)
 	move.w D7, -(SP)
-	
 	move.w rectX(A1), -(SP)
 	move.w rectY(A1), -(SP)
 	move.w rectW(A1), -(SP)
 	move.w rectH(A1), -(SP)
-	;_debugger
+	jsr contains
+	tst.w (SP)+
+	beq.s bounceBrick
+	
+	subq.l #2, SP
+	move.w D6, -(SP)
+	add.w #ballW, (SP)
+	move.w D7, -(SP)
+	move.w rectX(A1), -(SP)
+	move.w rectY(A1), -(SP)
+	move.w rectW(A1), -(SP)
+	move.w rectH(A1), -(SP)
 	jsr contains
 	tst.w (SP)+
 	beq.s bounceBrick
 
+	subq.l #2, SP
+	move.w D6, -(SP)
+	move.w D7, -(SP)
+	add.w #ballH, (SP)
+	move.w rectX(A1), -(SP)
+	move.w rectY(A1), -(SP)
+	move.w rectW(A1), -(SP)
+	move.w rectH(A1), -(SP)
+	jsr contains
+	tst.w (SP)+
+	beq.s bounceBrick
+	
+	subq.l #2, SP
+	move.w D6, -(SP)
+	add.w #ballW, (SP)
+	move.w D7, -(SP)
+	add.w #ballH, (SP)
+	move.w rectX(A1), -(SP)
+	move.w rectY(A1), -(SP)
+	move.w rectW(A1), -(SP)
+	move.w rectH(A1), -(SP)
+	jsr contains
+	tst.w (SP)+
+	beq.s bounceBrick
+
+endCheck
 	add.l #8, A1
 
 	dbra D0, brickColLoop
@@ -544,6 +591,9 @@ brickColLoop
 bounceBrick
 	neg.w ballDy(A6)
 	
+	eor.l D3, (A2)
+	beq.s end
+	
 	move.w #bg, D0
 	swap D0
 	move.w rectX(A1), D0
@@ -551,8 +601,6 @@ bounceBrick
 	move.w rectW(A1), D2
 	move.w rectH(A1), D3
 	jsr drawRect
-	
-	
 	
 	;_debugger
 	bra.s checkMouse
