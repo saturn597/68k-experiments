@@ -4,18 +4,6 @@
 	include 'Traps.a'		; Gets us A-traps
 	include 'SysEqu.a'  	; For ScrnBase
 
-black equ -1
-white equ 0
-
-fg equ white
-bg equ black
-
-brickW equ 64
-brickH equ 7
-brickXSpace equ 20
-brickYSpace equ 40
-brickMaxY equ 200
-
 qdglobals	record 0, decrement
 thePort ds.l 1
 white ds.l 2
@@ -34,6 +22,18 @@ randSeed ds.l 1
 	org -206
 	endr
 
+black equ -1
+white equ 0
+
+fg equ black
+bg equ white
+
+brickW equ 64
+brickH equ 7
+brickXSpace equ 20
+brickYSpace equ 40
+brickMaxY equ 200
+
 hBricks equ 6
 vBricks equ 4
 numBricks equ vBricks*hBricks
@@ -43,11 +43,19 @@ rectY equ 2
 rectW equ 4
 rectH equ 6
 rectSize equ 8
-	
+
+ballW equ 7						; ball width
+ballH equ 7						; ball height
+
+paddleW equ 100					; paddle width
+paddleH equ 4					; paddle height
+paddleY equ 300					; paddle Y
+
 qd ds.b qdglobals			; allocate for QuickDraw globals
 bricks ds.b rectSize*numBricks
 brickStatus ds.l 1
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 drawLineHelper proc
 	; Take x-coords D0.w and D1.w and y-coord D2.w. Draw a horizontal line at D2,
@@ -137,7 +145,8 @@ drawLineHelper proc
 	rts
 	endp
 
-	
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 drawLine proc
 	; Draw a horizontal line from x=D0.w to x=D1.w, at y=D2.w. If upper
 	; word of D0 is negative, draw in black.
@@ -162,8 +171,10 @@ drawLine proc
 	rts
 	endp
 	
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 drawRect proc
-	; Draw a  rectangle at coordinates given in D0-D1, width and height in
+	; Draw a rectangle at coordinates given in D0-D1, width and height in
 	; D2-D3.If upper word of D0 is negative, draw in black.
 	
 	cmpi #0, D3				; Don't do anything if height <= 0
@@ -189,6 +200,8 @@ drawRect proc
 	rts
 	endp
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 getBitsInScreen proc
 	; Returns the number of bits in the screen.
 	
@@ -205,6 +218,8 @@ getBitsInScreen proc
 	move.l (SP)+, D1		; Restore D1
 	rts
 endp
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 drawPattern proc
 	; Takes a word passed on the stack as a pattern. Copy that pattern
@@ -225,6 +240,8 @@ drawPattern proc
 	pea (A0)				; Restore the return address
 	rts
 	endp
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 contains proc
 
@@ -276,14 +293,19 @@ end
 	adda.l #paramSize, SP
 	jmp (A0)
 	endp
-	
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 drawBricks proc
+	; Draws all the bricks on screen in the foreground color
 	movem.l D0-D4/A0, -(SP)
 	
 	move.w #numBricks-1, D4
 	lea.l bricks, A0
 
 loop
+	move.w #fg, D0
+	swap D0
 	move.w rectX(A0), D0
 	move.w rectY(A0), D1
 	move.w rectW(A0), D2
@@ -298,8 +320,13 @@ loop
 	movem.l (SP)+, D0-D4/A0
 	rts
 	endp
-	
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 setBricks proc
+	; Sets up the bricks - set 24 bricks to an active status, and store
+	; data on their location so we can reference it later.
+	
 	movem.l D0-D4/A0, -(SP)
 	
 	lea.l brickStatus, A0
@@ -335,21 +362,7 @@ end
 	rts
 	endp
 
-collision proc
-frame 	record {a6Link}, decr
-x		ds.w	1
-y		ds.w	1
-a6Link	ds.l	1
-	endr
-	
-	endp
-
-ballW equ 7						; ball width
-ballH equ 7						; ball height
-
-paddleW equ 100					; paddle width
-paddleH equ 7					; paddle height
-paddleY equ 300					; paddle Y
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 start main
 
@@ -457,13 +470,13 @@ updateBall
 	move.w D5, D7
 	add.w D1, D6
 	add.w D2, D7
-	;recalc ball's position
-
-
+	; Recalc ball's position.
+	; Next we'll check for collisions.
+	
 screenBottom
 	cmp.w maxY(A6), D7
 	bmi.s screenTop
-	neg.w ballDy(A6)
+	neg.w ballDy(A6)				; If collision, bounce other wayÂ
 	bra.w end
 screenTop
 	cmp.w minY(A6), D7
@@ -620,5 +633,3 @@ checkMouse
 end
 	_ExitToShell
 	end
-	
-
