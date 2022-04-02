@@ -28,12 +28,6 @@ white equ 0
 fg equ black
 bg equ white
 
-brickW equ 64
-brickH equ 7
-brickXSpace equ 20
-brickYSpace equ 40
-brickMaxY equ 200
-
 hBricks equ 6
 vBricks equ 4
 numBricks equ vBricks*hBricks
@@ -44,16 +38,21 @@ rectW equ 4
 rectH equ 6
 rectSize equ 8
 
-ballW equ 7						; ball width
-ballH equ 7						; ball height
+brickW ds.w 1					; brick width
+brickH ds.w 1					; brick height
+ballW ds.w 1					; ball width
+ballH ds.w 1					; ball height
+paddleW ds.w 1					; paddle width
+paddleH ds.w 1					; paddle height
+paddleY ds.w 1					; paddle Y
+brickXSpace ds.w 1				; horizontal width between bricks
+brickYSpace ds.w 1				; vertical width between bricks
+brickMaxY ds.w 1				; max y value for brick placement
 
-paddleW equ 100					; paddle width
-paddleH equ 4					; paddle height
-paddleY equ 300					; paddle Y
-
-qd ds.b qdglobals			; allocate for QuickDraw globals
 bricks ds.b rectSize*numBricks
 brickStatus ds.l 1
+
+qd ds.b qdglobals			; allocate for QuickDraw globals
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -332,10 +331,10 @@ setBricks proc
 	lea.l brickStatus, A0
 	move.l #$00ffffff, (A0)
 	
-	move.w #brickXSpace, D0
-	move.w #brickYSpace, D1
-	move.w #brickW, D2
-	move.w #brickH, D3
+	move.w brickXSpace, D0
+	move.w brickYSpace, D1
+	move.w brickW, D2
+	move.w brickH, D3
 		
 	lea.l bricks, A0
 loop
@@ -344,17 +343,17 @@ loop
 	move.w D2, rectW(A0)
 	move.w D3, rectH(A0)
 	
-	add.w #brickXSpace, D0
-	add.w #brickW, D0
+	add.w brickXSpace, D0
+	add.w brickW, D0
 	add.l #rectSize, A0
 	cmp.w qd.rectRight, D0
 	bmi.s loop
 
-	move.w #brickXSpace, D0
-	add.w #brickYSpace, D1
-	add.w #brickH, D1
+	move.w brickXSpace, D0
+	add.w brickYSpace, D1
+	add.w brickH, D1
 	
-	cmp.w #brickMaxY, D1
+	cmp.w brickMaxY, D1
 	bmi.s loop
 end
 
@@ -391,19 +390,46 @@ localSize 	equ		*
 	_initGraf				; Initialize QuickDraw globals
 
 	_hideCursor
+		
+	lea.l paddleW, A0
+	move.w #100, (A0)
+	lea.l paddleH, A0
+	move.w #4, (A0)
+	lea.l paddleY, A0
+	move.w #300, (A0)
+	
+	lea.l ballW, A0
+	move.w #7, (A0)
+	lea.l ballH, A0
+	move.w #7, (A0)
+	
+	lea.l brickW, A0
+	move.w #64, (A0)
+	lea.l brickH, A0
+	move.w #7, (A0)
+	
+	lea.l brickXSpace, A0
+	move.w #20, (A0)
+	lea.l brickYSpace, A0
+	move.w #40, (A0)
+	
+	lea.l brickMaxY, A0
+	move.w #200, (A0)
 	
 	jsr setBricks
-	
+
 	move.w #0, D0			; initialize coordinates
 		
+	move.w ballW, D1
+	move.w ballH, D2
 	move.w qd.rectRight, maxX(A6)
-	sub.w #ballW, maxX(A6)
+	sub.w D1, maxX(A6)
 	move.w qd.rectLeft, minX(A6)
-	add.w #ballW, minX(A6)
+	add.w D1, minX(A6)
 	move.w qd.rectBottom, maxY(A6)
-	sub.w #ballH, maxY(A6)
+	sub.w D2, maxY(A6)
 	move.w qd.rectTop, minY(A6)
-	add.w #ballH, minY(A6)
+	add.w D2, minY(A6)
 
 initializeGame
 	move.l ticks, prevTicks(A6)
@@ -420,9 +446,9 @@ initializeGame
 	move.w #4, ballDy(A6)
 
 gameLoop
-	move.w #paddleY, D1
-	move.w #paddleW, D2
-	move.w #paddleH, D3
+	move.w paddleY, D1
+	move.w paddleW, D2
+	move.w paddleH, D3
 	
 	move.l RawMouse, D4		; get mouse coordinates
 	
@@ -497,11 +523,12 @@ paddle
 	subq.l #2, SP
 	move.w D6, -(SP)
 	move.w D7, -(SP)
-	add.w #ballH, (SP)				; Looking at bottom left corner of ball
+	move.w ballH, D1
+	add.w D1, (SP)				; Looking at bottom left corner of ball
 	move.w paddleX(A6), -(SP)
-	move.w #paddleY, -(SP)
-	move.w #paddleW, -(SP)
-	move.w #paddleH, -(SP)
+	move.w paddleY, -(SP)
+	move.w paddleW, -(SP)
+	move.w paddleH, -(SP)
 	jsr contains
 	tst.w (SP)+
 	bmi.s brickCol
@@ -518,7 +545,10 @@ brickColLoop
 	asl.l D0, D2				; Set up mask for current brick
 	move.l D2, D3				; Save mask for later in D3
 	and.l D1, D2
-	beq.s endCheck				; Skip collision check if brick is "dead"
+	beq.w endCheck				; Skip collision check if brick is "dead"
+	
+	move.w ballW, D1
+	move.w ballH, D2
 	
 	; For each brick, check each corner of the ball. If the corner is 
 	; inside the brick, then we have a collision. If collision, branch to 
@@ -537,7 +567,7 @@ brickColLoop
 	; Test upper right corner of ball.
 	subq.l #2, SP
 	move.w D6, -(SP)
-	add.w #ballW, (SP)
+	add.w D1, (SP)
 	move.w D7, -(SP)
 	move.w rectX(A1), -(SP)
 	move.w rectY(A1), -(SP)
@@ -551,7 +581,7 @@ brickColLoop
 	subq.l #2, SP
 	move.w D6, -(SP)
 	move.w D7, -(SP)
-	add.w #ballH, (SP)
+	add.w D2, (SP)
 	move.w rectX(A1), -(SP)
 	move.w rectY(A1), -(SP)
 	move.w rectW(A1), -(SP)
@@ -563,9 +593,9 @@ brickColLoop
 	; Test lower right corner of ball.
 	subq.l #2, SP
 	move.w D6, -(SP)
-	add.w #ballW, (SP)
+	add.w D1, (SP)
 	move.w D7, -(SP)
-	add.w #ballH, (SP)
+	add.w D2, (SP)
 	move.w rectX(A1), -(SP)
 	move.w rectY(A1), -(SP)
 	move.w rectW(A1), -(SP)
@@ -612,8 +642,8 @@ endCollisions
 	swap D0
 	move.w D4, D0
 	move.w D5, D1
-	move.w #ballW, D2
-	move.w #ballH, D3
+	move.w ballW, D2
+	move.w ballH, D3
 	jsr drawRect
 	;clear previous ball
 	
