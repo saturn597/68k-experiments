@@ -47,7 +47,8 @@ paddleH ds.w 1					; paddle height
 paddleY ds.w 1					; paddle Y
 brickXSpace ds.w 1				; horizontal width between bricks
 brickYSpace ds.w 1				; vertical width between bricks
-brickMaxY ds.w 1				; max y value for brick placement
+brickXStart ds.w 1				; starting x-coord for bricks
+brickMaxY ds.w 1				; max y-value for brick placement
 
 bricks ds.b rectSize*numBricks
 brickStatus ds.l 1
@@ -326,16 +327,26 @@ setBricks proc
 	; Sets up the bricks - set 24 bricks to an active status, and store
 	; data on their location so we can reference it later.
 	
-	movem.l D0-D4/A0, -(SP)
+	movem.l D0-D5/A0, -(SP)
 	
 	lea.l brickStatus, A0
-	move.l #$00ffffff, (A0)
+	clr.l D0
+	moveq.l #-1, D0
+	move.w #numBricks, D1
+	lsl.l D1, D0
+	not.l D0
+	move.l D0, (A0)					; brickStatus gets a "1" for ea. brick
 	
-	move.w brickXSpace, D0
+	_debugger
+	move.w brickXStart, D0
 	move.w brickYSpace, D1
 	move.w brickW, D2
 	move.w brickH, D3
 		
+	move.w #hBricks, D4
+	move.w #vBricks, D5
+	subq.w #1, D4
+	subq.w #1, D5
 	lea.l bricks, A0
 loop
 	move.w D0, rectX(A0)
@@ -346,18 +357,18 @@ loop
 	add.w brickXSpace, D0
 	add.w brickW, D0
 	add.l #rectSize, A0
-	cmp.w qd.rectRight, D0
-	bmi.s loop
+	dbra D4, loop
 
-	move.w brickXSpace, D0
+	move.w #hBricks, D4
+	subq.w #1, D4
+	move.w brickXStart, D0
 	add.w brickYSpace, D1
 	add.w brickH, D1
 	
-	cmp.w brickMaxY, D1
-	bmi.s loop
+	dbra D5, loop
 end
 
-	movem.l (SP)+, D0-D4/A0
+	movem.l (SP)+, D0-D5/A0
 	rts
 	endp
 
@@ -391,25 +402,55 @@ localSize 	equ		*
 
 	_hideCursor
 		
+	; 512x342
+	
+	; Make paddle width 1/5th of screen
 	lea.l paddleW, A0
-	move.w #100, (A0)
+	move.w qd.rectRight, D0
+	divu.w #5, D0
+	move.w D0, (A0)
+	
+	; Paddle Y should be 7/8th down screen
+	lea.l paddleY, A0
+	clr.l D0
+	move.w qd.rectBottom, D0
+	divu.w #8, D0
+	mulu.w #7, D0
+	move.w D0, (A0)
+	
 	lea.l paddleH, A0
 	move.w #4, (A0)
-	lea.l paddleY, A0
-	move.w #300, (A0)
-	
+
 	lea.l ballW, A0
 	move.w #7, (A0)
 	lea.l ballH, A0
 	move.w #7, (A0)
-	
+
 	lea.l brickW, A0
-	move.w #64, (A0)
+	lea.l brickXSpace, A1
+	lea.l brickXStart, A2
+	clr.l D0
+	move.w qd.rectRight, D0
+	divu.w #10, D0			; 10% of screen width in D0
+	clr.w D1
+	move.w D0, D1
+	divu.w #2, D1			; 5% of screen width in D1
+	move.w D1, (A2)
+	mulu.w #9, D0			; brick area takes up 90% of screen width
+	divu.w #hBricks, D0
+	swap D0
+	clr.w D0
+	swap D0
+	divu.w #10, D0
+	move.w D0, (A1)
+	mulu.w #9, D0
+	move.w D0, (A0)
+	;move.w #64, (A0)
+	;move.w #20, (A1)
+	
 	lea.l brickH, A0
 	move.w #7, (A0)
 	
-	lea.l brickXSpace, A0
-	move.w #20, (A0)
 	lea.l brickYSpace, A0
 	move.w #40, (A0)
 	
